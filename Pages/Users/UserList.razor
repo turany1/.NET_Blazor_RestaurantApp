@@ -1,0 +1,46 @@
+@page "/users"
+@inject UserService UserService
+
+<h2>Users</h2>
+
+<table class="table table-striped">
+    <thead>
+        <tr><th>Name</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var u in users)
+        {
+            <tr>
+                <td>@u.Name</td>
+                <td>
+                    <button class="btn btn-link" @onclick="() => EditUser(u.UserId)">Edit</button>
+                    <button class="btn btn-link text-danger" @onclick="() => DeleteUser(u.UserId)">Delete</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+<button class="btn btn-success" @onclick="NewUser">Add User</button>
+
+@code {
+    private List<User> users = new();
+    protected override async Task OnInitializedAsync()
+    {
+        users = await UserService.GetAllAsync();
+    }
+    private void NewUser()
+    {
+        NavManager.NavigateTo("/users/edit/0");
+    }
+    private void EditUser(int id)
+    {
+        NavManager.NavigateTo($"/users/edit/{id}");
+    }
+    private async Task DeleteUser(int id)
+    {
+        await UserService.DeleteAsync(id);
+        users = await UserService.GetAllAsync();
+    }
+    [Inject]
+    private NavigationManager NavManager { get; set; } = null!;
+}

@@ -1,0 +1,79 @@
+@page "/dishes/edit/{DishId:int}"
+@inject DishService DishService
+@using SmallRestaurantApp.Models
+
+<h2>@(DishId == 0 ? "Add New Dish" : "Edit Dish")</h2>
+
+<EditForm Model="dish" OnValidSubmit="Save">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <div class="form-group">
+        <label>Name:</label>
+        <InputText class="form-control" @bind-Value="dish.Name" />
+    </div>
+    <div class="form-group">
+        <label>Description:</label>
+        <InputTextArea class="form-control" @bind-Value="dish.Description" />
+    </div>
+    <div class="form-group">
+        <label>Price:</label>
+        <InputNumber class="form-control" @bind-Value="dish.Price" />
+    </div>
+    <div class="form-group">
+        <label>Image:</label>
+        <InputFile OnChange="OnInputFileChange" />
+        @if (!string.IsNullOrEmpty(dish.ImagePath))
+        {
+            <img src="@dish.ImagePath" alt="@dish.Name" width="100" />
+        }
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <button type="button" class="btn btn-secondary ml-2" @onclick="Cancel">Cancel</button>
+</EditForm>
+
+@code {
+    [Parameter]
+    public int DishId { get; set; }
+
+    private Dish dish = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (DishId != 0)
+        {
+            var existing = await DishService.GetByIdAsync(DishId);
+            if (existing != null) dish = existing;
+        }
+    }
+
+    private async Task Save()
+    {
+        await DishService.AddOrUpdateAsync(dish);
+        NavManager.NavigateTo("/dishes");
+    }
+
+    private void Cancel()
+    {
+        NavManager.NavigateTo("/dishes");
+    }
+
+    private async Task OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        var uploads = Path.Combine("wwwroot", "images");
+        var extension = Path.GetExtension(file.Name);
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".gif" };
+        if (!allowed.Contains(extension.ToLower()))
+        {
+            return;
+        }
+        var filePath = Path.Combine(uploads, $"{Guid.NewGuid()}{extension}");
+        using var stream = file.OpenReadStream();
+        using var fs = new FileStream(filePath, FileMode.Create);
+        await stream.CopyToAsync(fs);
+        dish.ImagePath = filePath.Replace("wwwroot/", "");
+    }
+
+    [Inject]
+    private NavigationManager NavManager { get; set; } = null!;
+}

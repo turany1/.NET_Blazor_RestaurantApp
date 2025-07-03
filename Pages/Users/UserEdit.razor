@@ -1,0 +1,111 @@
+@page "/users/edit/{UserId:int}"
+@inject UserService UserService
+@inject NavigationManager NavManager
+
+<h2>@(UserId == 0 ? "Add New User" : "Edit User")</h2>
+
+<EditForm Model="user" OnValidSubmit="Save">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label>Name:</label>
+        <InputText class="form-control" @bind-Value="user.Name" />
+    </div>
+
+    <hr />
+    <h4>Addresses</h4>
+    @foreach (var addr in addressInputs)
+    {
+        <div class="border p-2 mb-2">
+            <InputText class="form-control mb-1" placeholder="Street" @bind-Value="addr.Street" />
+            <InputText class="form-control mb-1" placeholder="City" @bind-Value="addr.City" />
+            <InputText class="form-control mb-1" placeholder="Postal Code" @bind-Value="addr.PostalCode" />
+        </div>
+    }
+
+    <button class="btn btn-secondary mb-2" type="button" @onclick="AddAddressInput">Add Address</button>
+
+    <button type="submit" class="btn btn-primary">Save</button>
+    <button type="button" class="btn btn-secondary ml-2" @onclick="Cancel">Cancel</button>
+</EditForm>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+    private User user = new();
+    private List<Address> addressInputs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (UserId != 0)
+        {
+            var existing = await UserService.GetByIdAsync(UserId);
+            if (existing != null)
+            {
+                user = existing;
+                addressInputs = user.Addresses.Select(a => new Address
+                {
+                    Street = a.Street,
+                    City = a.City,
+                    PostalCode = a.PostalCode
+                }).ToList();
+            }
+        }
+    }
+
+    private async Task Save()
+    {
+        // Перевірка: принаймні одна повна адреса
+        bool hasAtLeastOneValid = addressInputs.Any(a =>
+            !string.IsNullOrWhiteSpace(a.Street) &&
+            !string.IsNullOrWhiteSpace(a.City) &&
+            !string.IsNullOrWhiteSpace(a.PostalCode));
+
+        if (!hasAtLeastOneValid)
+        {
+            Console.WriteLine("At least one complete address is required.");
+            return;
+        }
+
+        if (UserId == 0)
+        {
+            foreach (var addr in addressInputs)
+            {
+                if (!string.IsNullOrWhiteSpace(addr.Street) &&
+                    !string.IsNullOrWhiteSpace(addr.City) &&
+                    !string.IsNullOrWhiteSpace(addr.PostalCode))
+                {
+                    user.Addresses.Add(addr);
+                }
+            }
+
+            await UserService.AddOrUpdateAsync(user);
+        }
+        else
+        {
+            await UserService.AddOrUpdateAsync(user);
+
+            foreach (var addr in addressInputs)
+            {
+                if (!string.IsNullOrWhiteSpace(addr.Street) &&
+                    !string.IsNullOrWhiteSpace(addr.City) &&
+                    !string.IsNullOrWhiteSpace(addr.PostalCode))
+                {
+                    await UserService.AddAddressAsync(user.UserId, addr);
+                }
+            }
+        }
+
+        NavManager.NavigateTo("/users");
+    }
+
+    private void AddAddressInput()
+    {
+        addressInputs.Add(new Address());
+    }
+
+    private void Cancel()
+    {
+        NavManager.NavigateTo("/users");
+    }
+}

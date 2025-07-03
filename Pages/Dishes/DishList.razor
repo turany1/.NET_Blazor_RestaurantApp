@@ -1,0 +1,87 @@
+@page "/dishes"
+@inject DishService DishService
+@using SmallRestaurantApp.Models
+
+<h2>Dishes</h2>
+
+<div class="form-inline mb-3">
+    <input @bind="searchText" class="form-control mr-2" placeholder="Search..." />
+    <label class="form-check-label ml-2">
+        <input type="checkbox" @bind="useRegex" /> Use Regex
+    </label>
+    <button class="btn btn-primary ml-2" @onclick="Search">Search</button>
+    <button class="btn btn-success ml-2" @onclick="NewDish">Add Dish</button>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Image</th>
+            <th>Name</th>
+            <th>Price</th>
+            <th>Description</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var dish in dishes)
+        {
+            <tr>
+                <td>
+                    @if (!string.IsNullOrEmpty(dish.ImagePath))
+                    {
+                        <img src="@dish.ImagePath" alt="@dish.Name" width="50" height="50" />
+                    }
+                </td>
+                <td>@dish.Name</td>
+                <td>@dish.Price.ToString("C")</td>
+                <td>@dish.Description</td>
+                <td>
+                    <button class="btn btn-link" @onclick="() => EditDish(dish.DishId)">Edit</button>
+                    <button class="btn btn-link text-danger" @onclick="() => DeleteDish(dish.DishId)">Delete</button>
+                    <button class="btn btn-link" @onclick="() => ViewDetails(dish.DishId)">View</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<Dish> dishes = new();
+    private string? searchText;
+    private bool useRegex;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dishes = await DishService.GetAllAsync();
+    }
+
+    private async Task Search()
+    {
+        dishes = await DishService.SearchAsync(searchText, useRegex);
+    }
+
+    private void NewDish()
+    {
+        NavManager.NavigateTo("/dishes/edit/0");
+    }
+
+    private void EditDish(int id)
+    {
+        NavManager.NavigateTo($"/dishes/edit/{id}");
+    }
+
+    private async Task DeleteDish(int id)
+    {
+        await DishService.DeleteAsync(id);
+        dishes = await DishService.GetAllAsync();
+    }
+
+    private void ViewDetails(int id)
+    {
+        NavManager.NavigateTo($"/dishes/{id}");
+    }
+
+    [Inject]
+    private NavigationManager NavManager { get; set; } = null!;
+}

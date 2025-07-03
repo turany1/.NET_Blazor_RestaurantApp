@@ -1,0 +1,97 @@
+@page "/dishes/{DishId:int}"
+@inject DishService DishService
+@inject UserService UserService
+
+<h2>@dish?.Name</h2>
+
+@if (dish != null)
+{
+    <div class="row">
+        <div class="col-4">
+            @if (!string.IsNullOrEmpty(dish.ImagePath))
+            {
+                <img src="@dish.ImagePath" alt="@dish.Name" class="img-fluid"/>
+            }
+        </div>
+        <div class="col-8">
+            <p>@dish.Description</p>
+            <p><strong>Price:</strong> @dish.Price.ToString("C")</p>
+            <p><strong>Average Rating:</strong> @averageRating stars</p>
+        </div>
+    </div>
+    <hr/>
+    <h4>Comments</h4>
+    @foreach (var rev in dish.Comments.OrderByDescending(r => r.ReviewDate))
+    {
+        <div class="border p-2 mb-2">
+            <p>@rev.User?.Name - @rev.Rating stars</p>
+            <p>@rev.Text</p>
+            <small>@rev.ReviewDate.ToShortDateString()</small>
+        </div>
+    }
+
+    <hr/>
+    <h4>Add Comment</h4>
+    <EditForm Model="newComment" OnValidSubmit="SubmitComment">
+        <DataAnnotationsValidator/>
+        <ValidationSummary/>
+        <div class="form-group">
+            <label>User:</label>
+            <InputSelect @bind-Value="newComment.UserId" class="form-control">
+                <option value="0">Select User</option>
+                @foreach (var u in users)
+                {
+                    <option value="@u.UserId">@u.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="form-group">
+            <label>Rating:</label>
+            <InputNumber class="form-control" @bind-Value="newComment.Rating"/>
+        </div>
+        <div class="form-group">
+            <label>Comment:</label>
+            <InputTextArea class="form-control" @bind-Value="newComment.Text"/>
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </EditForm>
+}
+else
+{
+    <p>Loading...</p>
+}
+
+@code {
+    [Parameter] public int DishId { get; set; }
+    private Dish? dish;
+    private List<User> users = new();
+    private Comment newComment = new();
+
+    private decimal averageRating => dish != null && dish.Comments.Any() ? (decimal)dish.Comments.Average(r => (double)r.Rating) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        dish = await DishService.GetByIdAsync(DishId);
+        users = await UserService.GetAllAsync();
+        newComment.DishId = DishId;
+        newComment.ReviewDate = DateTime.UtcNow;
+    }
+
+    private async Task SubmitComment()
+    {
+        if (newComment.UserId == 0) return;
+
+        newComment.ReviewId = 0;
+
+        await DishService.AddReviewAsync(newComment);
+
+        dish = await DishService.GetByIdAsync(DishId);
+
+        newComment = new Comment
+        {
+            DishId = DishId,
+            ReviewDate = DateTime.UtcNow
+        };
+    }
+
+}

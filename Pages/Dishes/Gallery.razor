@@ -1,0 +1,37 @@
+@page "/gallery"
+@inject DishService DishService
+
+<h2>Menu</h2>
+
+<div class="row">
+    @foreach (var dish in dishes)
+    {
+        <div class="col-md-3 mb-3">
+            <div class="card">
+                @if (!string.IsNullOrEmpty(dish.ImagePath))
+                {
+                    <img src="@dish.ImagePath" class="card-img-top" alt="@dish.Name" />
+                }
+                <div class="card-body">
+                    <h5 class="card-title">@dish.Name</h5>
+                    <p class="card-text">@dish.Price.ToString("C")</p>
+                    <button class="btn btn-link" @onclick="() => ViewDetails(dish.DishId)">View</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Dish> dishes = new();
+    protected override async Task OnInitializedAsync()
+    {
+        dishes = await DishService.GetAllAsync();
+    }
+    private void ViewDetails(int id)
+    {
+        NavManager.NavigateTo($"/dishes/{id}");
+    }
+    [Inject]
+    private NavigationManager NavManager { get; set; } = null!;
+}

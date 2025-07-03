@@ -1,0 +1,185 @@
+@page "/orders/create"
+@inject OrderService OrderService
+@inject DishService DishService
+@inject UserService UserService
+@inject NavigationManager NavManager
+
+<h2>Create New Order</h2>
+
+<EditForm Model="order" OnValidSubmit="PlaceOrder">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label>User:</label>
+        <InputSelect TValue="int"
+                     Value="order.UserId"
+                     ValueChanged="EventCallback.Factory.Create<int>(this, HandleUserChanged)"
+                     ValueExpression="() => order.UserId"
+                     class="form-control">
+            <option value="0">Select User</option>
+            @foreach (var u in users)
+            {
+                <option value="@u.UserId">@u.Name</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="form-group">
+        <label>Delivery?</label>
+        <InputCheckbox @bind-Value="order.IsDelivery" />
+        Yes
+    </div>
+
+    @if (order.IsDelivery)
+    {
+        <div class="form-group">
+            <label>Address:</label>
+            <InputSelect @bind-Value="order.DeliveryAddressId" class="form-control">
+                <option value="">Select Address</option>
+                @foreach (var a in addresses)
+                {
+                    <option value="@a.AddressId">@a.Street, @a.City</option>
+                }
+            </InputSelect>
+            @if (order.DeliveryAddressId == 0)
+            {
+                <p class="text-danger">Please select a delivery address.</p>
+            }
+        </div>
+    }
+
+    <hr />
+    <h4>Items</h4>
+
+    <div class="form-group">
+        <label>Dish:</label>
+        <InputSelect @bind-Value="selectedDishId" class="form-control">
+            <option value="0">Select Dish</option>
+            @foreach (var d in dishes)
+            {
+                <option value="@d.DishId">@d.Name (@d.Price.ToString("C"))</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="form-group">
+        <label>Quantity:</label>
+        <InputNumber @bind-Value="quantity" class="form-control" />
+    </div>
+
+    <button type="button" class="btn btn-secondary" @onclick="AddItem">Add Item</button>
+
+    @if (orderItems.Any())
+    {
+        <table class="table table-sm mt-3">
+            <thead>
+                <tr>
+                    <th>Dish</th>
+                    <th>Qty</th>
+                    <th>Unit</th>
+                    <th>Total</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in orderItems)
+                {
+                    <tr>
+                        <td>@item.Dish?.Name</td>
+                        <td>@item.Quantity</td>
+                        <td>@item.UnitPrice.ToString("C")</td>
+                        <td>@item.LineTotal.ToString("C")</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" type="button" @onclick="() => RemoveItem(item)">Remove</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <p><strong>Subtotal:</strong> @orderItems.Sum(i => i.LineTotal).ToString("C")</p>
+        @if (order.IsDelivery)
+        {
+            <p><strong>Delivery Fee:</strong> @deliveryFee.ToString("C")</p>
+        }
+        <p><strong>Total:</strong> @(orderItems.Sum(i => i.LineTotal) + (order.IsDelivery ? deliveryFee : 0))</p>
+    }
+
+    <button type="submit" class="btn btn-primary" disabled="@(!CanSubmit)">Place Order</button>
+</EditForm>
+
+@code {
+    private Order order = new();
+    private List<User> users = new();
+    private List<Address> addresses = new();
+    private List<Dish> dishes = new();
+    private List<OrderItem> orderItems = new();
+    private int selectedDishId;
+    private int quantity = 1;
+    private decimal deliveryFee = 5.00m;
+
+    private bool CanSubmit =>
+        order.UserId > 0 &&
+        (!order.IsDelivery || (order.DeliveryAddressId != null && order.DeliveryAddressId > 0)) &&
+        orderItems.Any();
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await UserService.GetAllAsync();
+        dishes = await DishService.GetAllAsync();
+    }
+
+    private async Task HandleUserChanged(int userId)
+    {
+        order.UserId = userId;
+        var user = await UserService.GetByIdAsync(userId);
+        addresses = user?.Addresses?.ToList() ?? new();
+        Console.WriteLine($"Loaded {addresses.Count} addresses for user {userId}");
+        StateHasChanged();
+    }
+
+    private void AddItem()
+    {
+        if (selectedDishId == 0 || quantity <= 0) return;
+
+        var dish = dishes.FirstOrDefault(d => d.DishId == selectedDishId);
+        if (dish != null)
+        {
+            var item = new OrderItem
+            {
+                DishId = dish.DishId,
+                Dish = dish,
+                Quantity = quantity,
+                UnitPrice = dish.Price,
+                LineTotal = dish.Price * quantity
+            };
+            orderItems.Add(item);
+            selectedDishId = 0;
+            quantity = 1;
+        }
+    }
+
+    private void RemoveItem(OrderItem item)
+    {
+        orderItems.Remove(item);
+    }
+
+    private async Task PlaceOrder()
+    {
+        if (!CanSubmit) return;
+
+        var newOrder = new Order
+        {
+            UserId = order.UserId,
+            IsDelivery = order.IsDelivery,
+            DeliveryAddressId = order.IsDelivery ? order.DeliveryAddressId : null,
+            OrderDate = DateTime.UtcNow,
+            DeliveryFee = order.IsDelivery ? deliveryFee : 0,
+            Items = orderItems,
+            TotalPrice = orderItems.Sum(i => i.LineTotal) + (order.IsDelivery ? deliveryFee : 0)
+        };
+
+        await OrderService.CreateAsync(newOrder, orderItems);
+        NavManager.NavigateTo("/orders");
+    }
+}
